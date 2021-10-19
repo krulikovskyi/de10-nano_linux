@@ -1,2 +1,2 @@
 # de10-standard_linux_gui
-Script for creating linux for DE10-Standard board.
+Instructions for creating Linux for DE10-Standard board.
