@@ -1,0 +1,221 @@
+1. cd ~ 
+1.1 mkdir q
+2. cd q
+3. mkdir quartus
+4. mkdir eds
+5. install quartus and eds 20.1 #chmod +x SoCEDSSetup-20.1.0.711-linux.run
+6. mkdir comp_arm
+7. cd comp_arm
+
+8. wget https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/\
+gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+
+9. tar xf gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
+
+10. export PATH=`pwd`/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/bin:$PATH
+
+11. cd ..
+
+_____________________A. Setup____________________________
+
+
+12. mkdir cv_example.sdmmc  
+
+13. cd cv_example.sdmmc
+
+14. export TOP_FOLDER=`pwd`
+
+15. cd $TOP_FOLDER
+
+16. mkdir cv_soc_devkit_ghrd
+
+17. cd cv_soc_devkit_ghrd
+
+18. tar xf ~/q/eds/embedded/examples/hardware/cv_soc_devkit_ghrd/tgz/*.tar.gz
+
+19. rm -rf software
+
+
+__________________________B. Build U-Boot______________________
+
+20. cd $TOP_FOLDER/cv_soc_devkit_ghrd
+
+21. mkdir -p software/bootloader
+
+22. ~/q/eds/embedded/embedded_command_shell.sh \
+bsp-create-settings \
+   --type spl \
+   --bsp-dir software/bootloader \
+   --preloader-settings-dir "hps_isw_handoff/soc_system_hps_0" \
+   --settings software/bootloader/settings.bsp
+
+23. cd $TOP_FOLDER/cv_soc_devkit_ghrd/software/bootloader
+
+24. git clone https://github.com/altera-opensource/u-boot-socfpga
+
+25. cd u-boot-socfpga
+
+26. git checkout -b test-bootloader -t origin/socfpga_v2021.04     #остання гілка
+
+27. cd $TOP_FOLDER/cv_soc_devkit_ghrd/software/bootloader/u-boot-socfpga
+./arch/arm/mach-socfpga/qts-filter.sh cyclone5 ../../../ ../ ./board/altera/cyclone5-socdk/qts/
+
+28. cd $TOP_FOLDER/cv_soc_devkit_ghrd/software/bootloader/u-boot-socfpga
+
+29. export CROSS_COMPILE=arm-none-linux-gnueabihf-
+
+30. make socfpga_de10_nano_defconfig #install make, bison and flex if need
+                                     #check configs ls -l configs/socfpga*
+
+31. make -j 48
+
+
+
+The following files will be built in the $TOP_FOLDER/cv_soc_devkit_ghrd/software/bootloader/u-boot-socfpga folder:
+File				Description
+spl/u-boot-spl			SPL ELF executable
+u-boot				U-Boot ELF executable
+u-boot-with-spl.sfp		Bootable file: four copies of SPL and one copy on U-Boot image
+
+
+
+__________________________C. Building Linux Binaries______________________
+
+_____Prerequisites_____
+
+32. sudo apt-get install gawk wget git-core diffstat unzip texinfo \
+gcc-multilib  build-essential chrpath socat cpio python python3 \
+python3-pip python3-pexpect  xz-utils debianutils iputils-ping \
+python3-git python3-jinja2 libegl1-mesa libsdl1.2-dev  pylint3 xterm \
+libncurses-dev gawk flex bison openssl libssl-dev
+
+32.1 cd ~/q
+
+32.2 rm -rf linux-bin && mkdir linux-bin
+export set LINUX_BIN=`pwd`/linux-bin
+mkdir -p $LINUX_BIN/a9
+
+
+33. rm -rf linux && mkdir linux && export set LINUX_TOP=`pwd`/linux
+
+34. cd $LINUX_TOP
+export ARCH=arm
+export CROSS_COMPILE=arm-none-linux-gnueabihf-
+
+35. cd $LINUX_TOP && git clone https://github.com/altera-opensource/linux-socfpga linux-socfpga.a9
+
+36. cd linux-socfpga.a9
+
+37. git checkout -b test-kernel -t origin/socfpga-5.4.124-lts
+
+_____________Build the Linux kernel:_________________________
+
+38. make socfpga_defconfig
+
+39. make -j 48 zImage Image dtbs modules
+
+40. make -j 48 modules_install INSTALL_MOD_PATH=modules_install
+rm -rf modules_install/lib/modules/*/build
+rm -rf modules_install/lib/modules/*/source
+
+41. ln -s $LINUX_TOP/linux-socfpga.a9/arch/arm/boot/zImage $LINUX_BIN/a9/
+ln -s $LINUX_TOP/linux-socfpga.a9/arch/arm/boot/Image $LINUX_BIN/a9/
+ln -s $LINUX_TOP/linux-socfpga.a9/arch/arm/boot/dts/socfpga_cyclone5_socdk.dtb $LINUX_BIN/a9/
+
+____________________D. Building Yocto Rootfs____________________
+
+42. cd $LINUX_TOP
+mkdir rootfs && cd rootfs
+export set ROOTFS_TOP=`pwd`
+
+43. cd $ROOTFS_TOP
+rm -rf cv && mkdir cv && cd cv
+git clone -b honister git://git.yoctoproject.org/poky.git
+git clone -b master git://git.yoctoproject.org/meta-intel-fpga.git
+source poky/oe-init-build-env ./build
+echo 'MACHINE = "cyclone5"' >> conf/local.conf
+echo 'BBLAYERS += " ${TOPDIR}/../meta-intel-fpga "' >> conf/bblayers.conf
+# echo 'CORE_IMAGE_EXTRA_INSTALL += "openssh gdbserver"' >> conf/local.conf
+sudo apt-get install zstd
+
+#touch conf/sanity.conf
+
+bitbake core-image-minimal
+
+
+_____________________________________________________
+Common targets are:
+    core-image-minimal
+    core-image-full-cmdline
+    core-image-sato
+    core-image-weston
+    meta-toolchain
+    meta-ide-support
+
+_______________________________________________________
+
+
+
+
+
+
+
+
+ln -s $ROOTFS_TOP/cv/build/tmp/deploy/images/cyclone5/core-image-minimal-cyclone5.tar.gz $LINUX_BIN/a9/
+
+
+________________________E. Prepare SD Card Image_________________________
+
+  #Create sd card top folder, and get the sd card script:
+
+44. cd $TOP_FOLDER/
+	sudo rm -rf sd_card && mkdir sd_card && cd sd_card
+	wget https://releases.rocketboards.org/release/2020.05/gsrd/tools/make_sdimage_p3.py
+	chmod +x make_sdimage_p3.py
+
+
+# Prepare FAT partition:
+
+45.	cd $TOP_FOLDER/sd_card
+	mkdir sdfs &&  cd sdfs
+	cp $LINUX_BIN/a9/zImage .
+	cp $LINUX_BIN/a9/socfpga_cyclone5_socdk.dtb .
+	mkdir extlinux
+	echo "LABEL Linux Default" > extlinux/extlinux.conf
+	echo "    KERNEL ../zImage" >> extlinux/extlinux.conf
+	echo "    FDT ../socfpga_cyclone5_socdk.dtb" >> extlinux/extlinux.conf
+	echo "    APPEND root=/dev/mmcblk0p2 rw rootwait earlyprintk console=ttyS0,115200n8" >> extlinux/extlinux.conf
+
+
+ #Prepare Rootfs partition:
+46. cd $TOP_FOLDER/sd_card
+	sudo rm -rf rootfs
+	mkdir rootfs && cd rootfs
+	sudo tar xf $LINUX_BIN/a9/core-image-minimal-cyclone5.tar.gz
+	sudo rm -rf lib/modules/*
+	sudo cp -r $LINUX_BIN/a9/modules/* lib/modules
+
+
+ #Copy over the U-boot bootable binary file:
+
+47. cd $TOP_FOLDER/sd_card
+cp ../cv_soc_devkit_ghrd/software/bootloader/u-boot-socfpga/u-boot-with-spl.sfp .
+
+
+ # Prepare SD card image:
+ 
+48. cd $TOP_FOLDER/sd_card
+sudo python3 ./make_sdimage_p3.py -f \
+-P u-boot-with-spl.sfp,num=3,format=raw,size=10M,type=A2  \
+-P sdfs/*,num=1,format=fat32,size=100M \
+-P rootfs/*,num=2,format=ext3,size=300M \
+-s 512M \
+-n sdcard_cv.img
+
+
+49. Boot from SD Card
+Write SD card image to SD card.
+Set BSEL jumpersr to boot from 3.3V SD device:
+BSEL2=1 (left)
+BSEL1=0 (right)
+BSEL0=1 (left)
