@@ -140,7 +140,7 @@ sudo apt-get install zstd
 
 #touch conf/sanity.conf
 
-bitbake core-image-minimal
+bitbake core-image-sato
 
 
 _____________________________________________________
