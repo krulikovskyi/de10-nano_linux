@@ -1,2 +1,2 @@
-# de10-standard_linux_gui
-Instructions for creating Linux for DE10-Standard board.
+# de10-nano_linux
+Instructions for creating Linux for DE10-Nano board.
